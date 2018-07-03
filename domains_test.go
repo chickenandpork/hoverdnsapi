@@ -1,6 +1,7 @@
 package hoverdnsapi_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/chickenandpork/hoverdnsapi" // to ensure testing without extra access
@@ -25,6 +26,30 @@ func mustJsonMarshal(e interface{}) string {
 		return string(data)
 	}
 	panic("Json parsing of a constant string implies a broken testdata")
+}
+
+// TestAPIURL covers wher I've screwed up the attempt to be simple with the API URL.  Seems I keep
+// tracking two non-DRY equivalents.  Dammit, make them agree and simplify later.
+func TestAPIURL(t *testing.T) {
+	const thisWeeksURLToTry = "https://www.hover.com/api"
+
+	var tests = []struct {
+		desc     string
+		code     string
+		expected string
+	}{
+		{"login", "login", fmt.Sprintf("%s/%s", thisWeeksURLToTry, "login")},
+		{"domains", "domains", fmt.Sprintf("%s/%s", thisWeeksURLToTry, "domains")},
+		{"bogus", "otherwise", fmt.Sprintf("%s/%s", thisWeeksURLToTry, "otherwise")},
+		{"domainpost", "domains/12345/dns", fmt.Sprintf("%s/%s", thisWeeksURLToTry, "domains/12345/dns")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			observed := hoverdnsapi.APIURL(test.code)
+			assert.Equal(t, test.expected, observed)
+		})
+	}
 }
 
 // TestParseAddress is a framework to test any problematic addresses; I've loaded it with just Hover's address for basic parse-testing
