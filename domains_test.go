@@ -1,10 +1,10 @@
 package hoverdnsapi_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/chickenandpork/hoverdnsapi" // to ensure testing without extra access
+	json "github.com/gibson042/canonicaljson-go"
 	"github.com/go-test/deep"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,7 +21,7 @@ const (
 // mustJsonMarshal is a convenience function to make testcode a bit more streamlined with an inline
 // conversion
 func mustJsonMarshal(e interface{}) string {
-	if data, err := json.Marshal(e); err == nil {
+	if data, err := json.MarshalIndent(e, "", "    "); err == nil {
 		return string(data)
 	}
 	panic("Json parsing of a constant string implies a broken testdata")
@@ -86,4 +86,116 @@ Consider: %s`,
 				test.desc, test.expected, observed, diff, mustJsonMarshal(test.expected))
 		})
 	}
+}
+
+// TestRoundTrip ensures that parsing mapping has full coverage by taking a json sample, parsing to
+// a Domain structure, and then back to json; if the starting json is of canonical form, then
+// test-failures relate to missing parameters in the struct markup.  This allows me to cut-n-paste
+// a verbatim json output, run it through this test, and catch changes in the upstream format.  I
+// could concievably do this with a live query sample on a recurring basis.
+func TestRoundTrip(t *testing.T) {
+	sample := `    {
+      "id": "dom8675309",
+      "domain_name": "chickenandpork.com",
+      "num_emails": 1,
+      "renewal_date": "2020-05-30",
+      "display_date": "2020-05-30",
+      "registered_date": "2000-05-30",
+      "status": "active",
+      "auto_renew": true,
+      "renewable": true,
+      "locked": true,
+      "whois_privacy": true,
+      "nameservers": [
+        "ns3.hover.com",
+        "ns1.hover.com",
+        "ns2.hover.com"
+      ],
+      "contacts": {
+        "admin": {
+          "first_name": "Allan",
+          "org_name": "Chicken and Pork",
+          "city": "Porkville",
+          "country": "US",
+          "status": "active",
+          "email": "chickenandpork@example.com",
+          "address3": "",
+          "address1": "12345 SW Awesome St",
+          "last_name": "Clark",
+          "address2": "",
+          "fax": "",
+          "state": "PV",
+          "phone": "+1.2505551291",
+          "zip": "01337"
+        },
+        "owner": {
+          "address1": "12345 SW Awesome St",
+          "last_name": "Clark",
+          "address3": "",
+          "phone": "+1.2505551291",
+          "state": "PV",
+          "address2": "",
+          "fax": "",
+          "first_name": "Allan",
+          "org_name": "Chicken and Pork",
+          "city": "Porkville",
+          "email": "chickenandpork@example.com",
+          "country": "US",
+          "status": "active",
+          "zip": "01337"
+        },
+        "tech": {
+          "phone": "+1.2505551291",
+          "state": "PV",
+          "fax": "",
+          "address2": "",
+          "address1": "12345 SW Awesome St",
+          "last_name": "Clark",
+          "address3": "",
+          "email": "chickenandpork@example.com",
+          "country": "US",
+          "status": "active",
+          "org_name": "Chicken and Pork",
+          "first_name": "Allan",
+          "city": "Porkville",
+          "zip": "01337"
+        },
+        "billing": {
+          "city": "Porkville",
+          "org_name": "Chicken and Pork",
+          "first_name": "Allan",
+          "status": "active",
+          "country": "US",
+          "email": "chickenandpork@example.com",
+          "address3": "",
+          "last_name": "Clark",
+          "address1": "12345 SW Awesome St",
+          "state": "PV",
+          "fax": "",
+          "address2": "",
+          "phone": "+1.2505551291",
+          "zip": "01337"
+        }
+      },
+      "glue": {},
+      "hover_user": {
+        "email": "chickenandpork@example.com",
+        "email_secondary": "chickenandpork@example.com",
+        "billing": {
+          "pay_mode": "apple_pay",
+          "description": "Black metal card ending 1337"
+        }
+      }
+    }`
+
+	canonizer := make(map[string]interface{}, 1)
+	json.Unmarshal([]byte(sample), &canonizer)
+	canonicalSample := mustJsonMarshal(canonizer)
+
+	var observed hoverdnsapi.Domain
+	json.Unmarshal([]byte(canonicalSample), &observed)
+
+	observedJson := mustJsonMarshal(observed)
+
+	assert.Equal(t, canonicalSample, observedJson)
 }
