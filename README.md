@@ -16,12 +16,20 @@ I should apologize, I'm new to Go, so my Go might be of poor-quality.  Please PR
 
 # How to build
 
-    $ git clone http://github.com/chickenandpork/hoverdnsapi hoverapi
-    $ cd hoverapi && go test ./...
+    $ git clone http://github.com/chickenandpork/hoverdnsapi hoverdnsapi
+    $ cd hoverdnsapi && go test ./...
 
 By itself, it's just the parsing structures which are the common code behind what I'm doing.
 
 This builds with Go-1.10, I hope it won't break going forward.
+
+## Automatic builds
+
+```bash
+go get github.com/githubnemo/CompileDaemon
+cd hoverdnsapi && CompileDaemon \
+	-build="go build ./cmd/hoverdns" -exclude-dir=.git -exclude=".*.swp" \
+	-command="./hoverdns -a -m allanc@smallfoot.org --domains smallfoot.org info"
 
 
 # Why?
@@ -31,5 +39,7 @@ I didn't find one, so I had to build it.  I hope the next person can leverage th
 
 # License
 
-MIT.  Use as you like.  A thanks would be cool, but you're not contractually bound.
+MIT.  Use as you like.  Everywhere.
+
+A thanks would be cool, or kudos on https://www.linkedin.com/in/goldfish, but it's totally OK if you're too busy fighting truly criminal coding errors to feed my curiosity.
 

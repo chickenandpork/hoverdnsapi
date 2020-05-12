@@ -1,3 +1,6 @@
+// Package hoverdnsapi offers some API actions to control your Hover/TuCOWS DNS entries
+// programmatically.  This isn't a supported utility form Hover, it's just a thing I wrote because
+// I needed it at the time.
 package hoverdnsapi
 
 import (
@@ -63,32 +66,58 @@ type ContactBlock struct {
 // contact addresses, nameservers, etc: it seems to cover everything about the domain in one
 // structure, which is convenient when you want to compare data across many domains.
 type Domain struct {
-	ID             string       `json:"id"`              // A unique opaque identifier defined by Hover
-	DomainName     string       `json:"domain_name"`     // the actual domain name.  ie: "example.com"
-	NumEmails      int          `json:"num_emails"`      // This appears to be the number of email accounts either permitted or defined for the domain
-	RenewalDate    string       `json:"renewal_date"`    // This renewal date appears to be the first day of non-service after a purchased year of valid service: the first day offline if you don't renew.  RFC3339/ISO8601 -formatted yyyy-mm-dd.
-	DisplayDate    string       `json:"display_date"`    // Display Date seems to be the same as Renewal Date but perhaps can allow for odd display corner-cases such as leap-years, leap-seconds, or timezones oddities.  RFC3339/ISO8601 to granularity of day as well.
-	RegisteredDate string       `json:"registered_date"` // Date the domain was first registered, which is likely also the first day of service (or partial-day, technically)  RFC3339/ISO8601 to granularity of day as well.
+	ID             string       `json:"id"`                        // A unique opaque identifier defined by Hover
+	DomainName     string       `json:"domain_name"`               // the actual domain name.  ie: "example.com"
+	NumEmails      int          `json:"num_emails,omitempty"`      // This appears to be the number of email accounts either permitted or defined for the domain
+	RenewalDate    string       `json:"renewal_date,omitempty"`    // This renewal date appears to be the first day of non-service after a purchased year of valid service: the first day offline if you don't renew.  RFC3339/ISO8601 -formatted yyyy-mm-dd.
+	DisplayDate    string       `json:"display_date"`              // Display Date seems to be the same as Renewal Date but perhaps can allow for odd display corner-cases such as leap-years, leap-seconds, or timezones oddities.  RFC3339/ISO8601 to granularity of day as well.
+	RegisteredDate string       `json:"registered_date,omitempty"` // Date the domain was first registered, which is likely also the first day of service (or partial-day, technically)  RFC3339/ISO8601 to granularity of day as well.
+	Active         bool         `json:"active,omitempty"`          // Domain Entries also show which zones are active
 	Contacts       ContactBlock `json:"contacts"`
-	HoverUser      User         `json:"hover_user"`
-	Glue           struct{}     `json:"glue"` // I'm not sure how Hover records Glue Records here, or whether they're still used.  Please PR a suggested format!
-	NameServers    []string     `json:"nameservers"`
-	Locked         bool         `json:"locked"`
-	Renewable      bool         `json:"renewable"`
-	AutoRenew      bool         `json:"auto_renew"`
-	Status         string       `json:"status"`        // Status seems to be "active" in all my zones
-	WhoisPrivacy   bool         `json:"whois_privacy"` // boolean as lower-case string: keep your real address out of whois?
+	Entries        []Entry      `json:"entries,omitempty"` // entries in a zone, if expanded with detail
+	HoverUser      User         `json:"hover_user,omitempty"`
+	Glue           struct{}     `json:"glue,omitempty"` // I'm not sure how Hover records Glue Records here, or whether they're still used.  Please PR a suggested format!
+	NameServers    []string     `json:"nameservers,omitempty"`
+	Locked         bool         `json:"locked,omitempty"`
+	Renewable      bool         `json:"renewable,omitempty"`
+	AutoRenew      bool         `json:"auto_renew,omitempty"`
+	Status         string       `json:"status,omitempty"`        // Status seems to be "active" in all my zones
+	WhoisPrivacy   bool         `json:"whois_privacy,omitempty"` // boolean as lower-case string: keep your real address out of whois?
+}
+
+// Entry is a single DNS record, such as a single NS, TXT, A, PTR, AAAA record within a zone.
+type Entry struct {
+	CanRevert bool   `json:"can_revert"`
+	Content   string `json:"content"`    // free-form text of verbatim value to store (ie "192.168.0.1" for A-rec)
+	ID        string `json:"id"`         // A unique opaque identifier defined by Hover
+	Default   bool   `json:"is_default"` // seems to track the default @ or "*" record
+	Name      string `json:"name"`       // entry name, or "*" for default
+	TTL       int    `json:"ttl"`        // TimeToLive, seconds
+	Type      string `json:"type"`       // record type: A, MX, PTR, TXT, etc
+}
+
+// PlaintextAuth is a structure into which the username and password are read from a plaintext
+// file.  This is necessary because when this code is written, Hover offers no API, so raw logins
+// are mimicked as clients.  This has risks, of course.  The trade-off is that plaintext risk
+// versus no functionality means we have no alternative.  For this reason, reading the auth from a
+// file on disk means it cannot be offered in-code during integration tests, and similarly, can be
+// provided by a configmap or similar during a production deployment.
+//
+// For versatility, the intent is to accept JSON, YAML, and even XML if it's trivial to do.
+type PlaintextAuth struct {
+	Username          string `json:"username"`          // username such as 'chickenandpork', exactly as typed in the login form
+	PlaintextPassword string `json:"plaintextpassword"` // password, in plaintext, for login, exactly as typed in the login form
 }
 
 // The User record in a Domain seems to record additional contact information that augments the
 // Billing Contact with the credit card used and some metadata around it.
 type User struct {
 	Billing struct {
-		Description string `json:"description"` // This seems to be a descirption of my card, such as "Visa ending 1234"
-		PayMode     string `json:"pay_mode"`    // some reference to how payments are processed:  mine all say "apple_pay", and they're in my Apple Pay Wallet, but my account on Hover predates the existence of Apple Wallet, so ... I'm not sure
-	} `json:"billing"`
-	Email          string `json:"email"`
-	EmailSecondary string `json:"email_secondary"`
+		Description string `json:"description,omitempty"` // This seems to be a description of my card, such as "Visa ending 1234"
+		PayMode     string `json:"pay_mode,omitempty"`    // some reference to how payments are processed:  mine all say "apple_pay", and they're in my Apple Pay Wallet, but my account on Hover predates the existence of Apple Wallet, so ... I'm not sure
+	} `json:"billing,omitempty"`
+	Email          string `json:"email,omitempty"`
+	EmailSecondary string `json:"email_secondary,omitempty"`
 }
 
 var (
@@ -128,6 +157,7 @@ type Client struct {
 	domains    DomainList // intentionally private
 	Username   string
 	Password   string
+	detail     *string //FIXME    *DomainDetail // somewhat redundant to domains, adds record detail
 }
 
 // APIURL is an attempt to keep the URLs all based from parsedBaseURL, but more symbollically
@@ -135,7 +165,6 @@ type Client struct {
 //
 // TODO: consider rolling in c.BaseURL
 func APIURL(resource string) string {
-	fmt.Println("parsedBaseURL is ", parsedBaseURL)
 	newURL := *parsedBaseURL
 	newURL.Path = fmt.Sprintf("%s/%s", newURL.Path, resource)
 	return newURL.String()
@@ -145,6 +174,38 @@ func APIURL(resource string) string {
 // the /domains/ and /dns pre/post wrappers
 func APIURLDNS(domainID string) string {
 	return APIURL(fmt.Sprintf("domains/%s/dns", domainID))
+}
+
+// GetDomainEntries gets the entries for a specific domain -- essentially the zone records
+func (c *Client) GetDomainEntries(domain string) error {
+	if _, err := c.GetAuth(); err != nil {
+		return fmt.Errorf(`Exception "%s" getting auth for [%s]`, err, APIURLDNS(domain))
+	}
+	resp, err := c.HTTPClient.Get(APIURLDNS(domain))
+	if err != nil {
+		c.log.Printf(`Exception "%s" hitting [%s]`, err, APIURLDNS(domain))
+		return fmt.Errorf(`Exception "%s" hitting [%s]`, err, APIURLDNS(domain))
+	} else {
+		body, _ := ioutil.ReadAll(resp.Body)
+		var nd DomainList
+		json.Unmarshal([]byte(body), &nd)
+
+		for n, v := range c.domains.Domains {
+			if v.DomainName == domain {
+				c.log.Printf(`replacing "%+v"`, c.domains.Domains[n])
+				for _, d := range nd.Domains {
+					if d.DomainName == domain {
+						c.domains.Domains[n] = d
+					}
+				}
+				c.log.Printf(`replaced "%+v"`, c.domains.Domains[n])
+				//c.log.Printf(`detail for "%s": %s`, domain, string(body))
+				//} else {
+				//c.log.Printf(`extending: Domain "%s" is not objective "%s"\n`, v.DomainName, domain)
+			}
+		}
+		return nil
+	}
 }
 
 // FillDomains fills the list of domains allocated to the usernamr and password to the Domains
@@ -157,15 +218,16 @@ func (c *Client) FillDomains() error {
 			c.log.Printf("hoverdnsapi: GET of %s threw: [%+v].  Domains not expected to be filled.", APIURL("domains"), err)
 			return fmt.Errorf("hoverdnsapi: GET of %s threw: [%+v].  Domains not expected to be filled", APIURL("domains"), err)
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
 			c.log.Printf("hover: Info: getting domains as user=%s pass=%s returned non-200: Status: %+v StatusCode: %+v\n", c.Username, c.Password, resp.Status, resp.StatusCode)
-			resp.Body.Close()
 			return fmt.Errorf("hoverdnsapi: GET of %s as user=%s returned non-200 error: Status: %+v StatusCode: %+v", APIURL("domains"), c.Username, resp.Status, resp.StatusCode)
 		} else {
 			json.NewDecoder(resp.Body).Decode(&c.domains)
 			c.log.Printf("hover: getting returned: [%+v]\n", c.domains)
-			resp.Body.Close()
+			// FIXME
+			c.GetDomainEntries("secretislandlair.ca")
 		}
 	} else {
 		c.log.Printf("Auth for user=%s at %s failed\n", c.Username, APIURL("domains"))
@@ -240,7 +302,7 @@ func (c *Client) GetDomainByName(domainname string) (*Domain, bool) {
 		if v.DomainName == domainname {
 			return &v, true
 		} else {
-			c.log.Printf("Domain %s is not objective %s\n", v.DomainName, domainname)
+			c.log.Printf(`Domain "%s" is not objective "%s"\n`, v.DomainName, domainname)
 		}
 	}
 
@@ -248,7 +310,7 @@ func (c *Client) GetDomainByName(domainname string) (*Domain, bool) {
 }
 
 // Upsert inserts or updates a TXT record using the specified parameters
-func (c *Client) Upsert(fqdn, domain, value string, ttl int) error {
+func (c *Client) Upsert(fqdn, domain, value string, ttl uint) error {
 
 	actions := []Action{}
 	if err := c.ExistingTXTRecords(fqdn); err == nil {
@@ -266,17 +328,57 @@ func (c *Client) Upsert(fqdn, domain, value string, ttl int) error {
 
 // Delete merely enqueues a delete action for DoActions to process
 func (c *Client) Delete(fqdn, domain string) error {
-
-	if err := c.DoActions(Action{action: Delete, fqdn: fqdn}); err != nil {
+	c.log.Printf(`deleting fqdn "%s" from domain "%s"`, fqdn, domain)
+	if err := c.DoActions(Action{action: Delete, fqdn: fqdn, domain: domain}); err != nil {
 		return fmt.Errorf("hover: failed to delete record for %s: %w", domain, err)
 	}
 
 	return nil
 }
 
+// HTTPDelete actually does an HTTP call eith the DELETE method.  BOG-standard Go only offers GET
+// and POST.
+//
+// TODO: move to a separate file as a layer onto net/http
+func (c *Client) HTTPDelete(url string) (err error) {
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("HTTPDelete: creating new request: %w", err)
+	}
+
+	//req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", d.token))
+
+	resp, err := c.HTTPClient.Do(req)
+	defer func() { _ = resp.Body.Close() }()
+	if err != nil {
+		return fmt.Errorf("HTTPDelete: executing delete request: %w", err)
+	}
+	return nil
+}
+
+// GetEntryByFQDN attempts to find a single Entry in the Domain, returning a non-nil result if
+// found.  "ok" is manipulated so that an "if" can be used to check whether it was found without
+// having to rely on sentinel or implicit values of the returned (ie a nil Entry might not always
+// mean "not found", but it does today)
+func (d Domain) GetEntryByFQDN(fqdn string) (e *Entry, ok bool) {
+	if !strings.HasSuffix(fqdn, "."+d.DomainName) {
+		return nil, false
+	}
+
+	hostname := fqdn[0:len(fqdn)-len(d.DomainName)-1] + ""
+	fmt.Printf("searching for [%s] (ie [%s]) in [%s]\n", hostname, fmt.Sprintf("%s.%s", hostname, d.DomainName), d.DomainName)
+
+	for _, e := range d.Entries {
+		if e.Name == hostname {
+			return &e, true
+		}
+	}
+	return nil, false
+}
+
 // NewClient Creates a Hover client using plaintext passwords against plain username.
 // Consider the risk of where the text is stored.
-func NewClient(username, password string, timeout time.Duration, opt ...interface{}) *Client {
+func NewClient(username, password, filename string, timeout time.Duration, opt ...interface{}) *Client {
 	j, _ := cookiejar.New(nil)
 	var defaultLogger YALI = golog.New(os.Stderr, "", golog.LstdFlags)
 
@@ -286,6 +388,14 @@ func NewClient(username, password string, timeout time.Duration, opt ...interfac
 			defaultLogger = v
 		}
 	}
+
+	if filename != "" {
+		if observed, err := ReadConfigFile(filename); err == nil {
+			username = observed.Username
+			password = observed.PlaintextPassword
+		}
+	}
+	fmt.Printf("logging in: u: %+v p: %+v f:%+v\n", username, password, filename)
 
 	return &Client{
 		HTTPClient: &http.Client{
