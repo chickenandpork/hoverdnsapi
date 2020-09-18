@@ -74,7 +74,7 @@ type Domain struct {
 	RegisteredDate string       `json:"registered_date,omitempty"` // Date the domain was first registered, which is likely also the first day of service (or partial-day, technically)  RFC3339/ISO8601 to granularity of day as well.
 	Active         bool         `json:"active,omitempty"`          // Domain Entries also show which zones are active
 	Contacts       ContactBlock `json:"contacts"`
-	Entries        []Entry      `json:"entries,omitempty"` // entries in a zone, if expanded with detail
+	Entries        []Entry      `json:"entries,omitempty"` // entries in a zone, if expanded
 	HoverUser      User         `json:"hover_user,omitempty"`
 	Glue           struct{}     `json:"glue,omitempty"` // I'm not sure how Hover records Glue Records here, or whether they're still used.  Please PR a suggested format!
 	NameServers    []string     `json:"nameservers,omitempty"`
@@ -114,7 +114,8 @@ type PlaintextAuth struct {
 type User struct {
 	Billing struct {
 		Description string `json:"description,omitempty"` // This seems to be a description of my card, such as "Visa ending 1234"
-		PayMode     string `json:"pay_mode,omitempty"`    // some reference to how payments are processed:  mine all say "apple_pay", and they're in my Apple Pay Wallet, but my account on Hover predates the existence of Apple Wallet, so ... I'm not sure
+		PayMode     string `json:"pay_mode,omitempty"`    // some reference to how payments are processed:  mine all say "apple_pay", and they're in my Apple
+		// Pay Wallet, but my account on Hover predates the existence of Apple Wallet, so ... I'm not sure
 	} `json:"billing,omitempty"`
 	Email          string `json:"email,omitempty"`
 	EmailSecondary string `json:"email_secondary,omitempty"`
@@ -157,7 +158,6 @@ type Client struct {
 	domains    DomainList // intentionally private
 	Username   string
 	Password   string
-	detail     *string //FIXME    *DomainDetail // somewhat redundant to domains, adds record detail
 }
 
 // APIURL is an attempt to keep the URLs all based from parsedBaseURL, but more symbollically
@@ -199,9 +199,6 @@ func (c *Client) GetDomainEntries(domain string) error {
 					}
 				}
 				c.log.Printf(`replaced "%+v"`, c.domains.Domains[n])
-				//c.log.Printf(`detail for "%s": %s`, domain, string(body))
-				//} else {
-				//c.log.Printf(`extending: Domain "%s" is not objective "%s"\n`, v.DomainName, domain)
 			}
 		}
 		return nil
@@ -225,9 +222,7 @@ func (c *Client) FillDomains() error {
 			return fmt.Errorf("hoverdnsapi: GET of %s as user=%s returned non-200 error: Status: %+v StatusCode: %+v", APIURL("domains"), c.Username, resp.Status, resp.StatusCode)
 		} else {
 			json.NewDecoder(resp.Body).Decode(&c.domains)
-			c.log.Printf("hover: getting returned: [%+v]\n", c.domains)
-			// FIXME
-			c.GetDomainEntries("secretislandlair.ca")
+			//c.log.Printf("hover: getting returned: [%+v]\n", c.domains)
 		}
 	} else {
 		c.log.Printf("Auth for user=%s at %s failed\n", c.Username, APIURL("domains"))
@@ -336,7 +331,7 @@ func (c *Client) Delete(fqdn, domain string) error {
 	return nil
 }
 
-// HTTPDelete actually does an HTTP call eith the DELETE method.  BOG-standard Go only offers GET
+// HTTPDelete actually does an HTTP call with the DELETE method.  BOG-standard Go only offers GET
 // and POST.
 //
 // TODO: move to a separate file as a layer onto net/http
@@ -355,6 +350,13 @@ func (c *Client) HTTPDelete(url string) (err error) {
 	}
 	return nil
 }
+
+// HTTPUpdate actually does an HTTP call with the PUT method.  BOG-standard Go only offers GET
+// and POST.
+//
+// # update an existing DNS record: client.call("put", "dns/dns1234567", {"content": "127.0.0.1"})
+//
+// TODO: I just couldn't get this to work properly: every attempt was 422: Unactionable.  Replaced by delete/add
 
 // GetEntryByFQDN attempts to find a single Entry in the Domain, returning a non-nil result if
 // found.  "ok" is manipulated so that an "if" can be used to check whether it was found without

@@ -68,7 +68,7 @@ func NewAction(action HoverAct, fqdn, domain, value string, ttl uint) Action {
 func (c *Client) DoActions(actions ...Action) (err error) {
 	var expansion = map[HoverAct]bool{
 		Error:  false,
-		Add:    true, // TODO: false
+		Add:    false,
 		Delete: true,
 		Update: true,
 		Expand: false, // of course
@@ -84,7 +84,14 @@ func (c *Client) DoActions(actions ...Action) (err error) {
 		} else {
 			c.log.Printf("current action (%d), %+v no pre-pending", n, a)
 		}
-		newActions = append(newActions, a)
+
+		if a.action == Update { // I just could NOT get update to work, so delete and re-add.  Sorry.
+			// NOTE: deleting and re-adding in dumbest way possible to incentivize me to fix it ;)
+			newActions = append(newActions, Action{action: Delete, fqdn: a.fqdn, domain: a.domain})
+			newActions = append(newActions, Action{action: Add, fqdn: a.fqdn, domain: a.domain, value: a.value, ttl: a.ttl})
+		} else {
+			newActions = append(newActions, a)
+		}
 	}
 	for n, a := range newActions {
 		c.log.Printf("resulting actions (%d), %+v", n, a)
@@ -115,7 +122,7 @@ func (c *Client) DoActions(actions ...Action) (err error) {
 					fmt.Printf("hover: Info: posting threw: [%+v]\n", err)
 				} else {
 					resp.Body.Close()
-					c.detail = nil // discard to force refresh on demand
+					domain.Entries = make([]Entry, 0) // discard to force refresh on demand
 				}
 			case Delete:
 				if len(domain.Entries) < 1 {
@@ -123,18 +130,11 @@ func (c *Client) DoActions(actions ...Action) (err error) {
 				} else if e, ok := domain.GetEntryByFQDN(a.fqdn); !ok {
 					c.log.Printf(`NOTE: FQDN "%s" in domain "%s" not found`, a.fqdn, domain.DomainName)
 				} else if err := c.HTTPDelete(fmt.Sprintf("%s/%s", APIURLDNS(domain.ID), e.ID)); err != nil {
-					fmt.Printf("hover: Info: deleting threw: [%+v]\n", err)
-					//} else {
-					//        resp.Body.Close()
+					c.log.Printf("hover: Info: deleting threw: [%+v]\n", err)
 				}
-			case Update:
-				if c.detail == nil {
-					//FIXME if err = c.FillDomainDetails(); err != nil {
-					//FIXME 	return err
-					//FIXME }
-				}
-				c.log.Printf("need to parse domain detail for %s", a.domain)
-				return fmt.Errorf("need to parse domain detail for %s", a.domain)
+			// As above, I just couldn't get Update to work, so I've doing a delete/add swapped above.  Therefore Update here should just fall-through
+			//case Update:
+
 			case Expand:
 				if len(domain.Entries) < 1 {
 					if err := c.GetDomainEntries(a.domain); err != nil {
