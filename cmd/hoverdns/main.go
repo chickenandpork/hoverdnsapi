@@ -9,6 +9,8 @@
 //
 //     go build ./cmd/... && \
 //     ./hoverdns -a -m "chickenandporn@gmail.com" -domains smallfoot.org -host test1 -value ABCDE add
+// or:
+//      go run ./cmd/... -a -m "chickenandporn@gmail.com" -domains smallfoot.org -host test1 -value ABCDE add
 // (then, yeah, *sigh*, I manually check the domain:  dig -t TXT test1.smallfoot.org)
 //
 //     ./hoverdns -a -m "chickenandporn@gmail.com" -domains smallfoot.org -host test1 delete
@@ -104,6 +106,27 @@ func main() {
 				},
 			},
 
+			// "update" adds an Update action to the Actions stack for each domain, then
+                        // executes, so any dependencies such as expanding records don't need to
+			// leak out here: just stack up the actions, let the subsys figure it out.
+			{Name: "update",
+				Usage: "update a record in each domain (extra parms for hostname and value)",
+				Action: func(c *cli.Context) error {
+					actions := make([]hover.Action, 0)
+					fmt.Printf("updating %v\n", domains.Value())
+					for _, d := range domains.Value() {
+						switch {
+						case value == "":
+						case hostpart == "":
+						default:
+							actions = append(actions, hover.NewAction(hover.Update, hostpart+"."+d, d, value, ttl))
+						}
+					}
+
+					return getClient(username, password, passfile).DoActions(actions...)
+				},
+			},
+
 			// "delete" adds a delete action to the Actions stack for each domain, then executes similar to
 			// "add" above: any dependencies such as expanding records don't need to leak out here: just
 			// stack up the actions, let the subsys figure it out.
@@ -138,10 +161,10 @@ func main() {
 		HelpName: "hoverdns",
 		Name:     "hoverdns",
 		Usage:    "Hover DNS CLI Client",
-		Action: func(c *cli.Context) error {
-			fmt.Println("That command doesn't seem to be a functional action to perform")
-			return nil
-		},
+		//Action: func(c *cli.Context) error {
+		//	fmt.Println("That command doesn't seem to be a functional action to perform")
+		//	return nil
+		//},
 		Version: version,
 	}
 
