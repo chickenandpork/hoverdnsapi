@@ -20,13 +20,13 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sync"
 	"time"
 
 	hover "github.com/chickenandpork/hoverdnsapi"
-	"github.com/go-acme/lego/v3/log"
 	"github.com/urfave/cli/v2"
 )
 
@@ -47,7 +47,6 @@ func getClient(username, password, passfile string) *hover.Client {
 
 	return client
 }
-
 
 func main() {
 	var (
@@ -107,7 +106,7 @@ func main() {
 			},
 
 			// "update" adds an Update action to the Actions stack for each domain, then
-                        // executes, so any dependencies such as expanding records don't need to
+			// executes, so any dependencies such as expanding records don't need to
 			// leak out here: just stack up the actions, let the subsys figure it out.
 			{Name: "update",
 				Usage: "update a record in each domain (extra parms for hostname and value)",
